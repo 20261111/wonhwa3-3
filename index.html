@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>3-3 회식 메뉴 조사</title>
-<meta name="description" content="2026 원화중 3학년 3반 회식 메뉴 조사">
+<title>3-3 메뉴 조사</title>
+<meta name="description" content="2026 원화중 3학년 3반 메뉴 조사">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap">
 <style>
@@ -63,6 +63,7 @@
     transition: border-color .15s, background .15s, transform .05s;
   }
   .opt:active { transform: scale(.98); }
+  .opt .check { font-size: 20px; line-height: 1; color: var(--accent); }
   .opt .emoji { font-size: 24px; line-height: 1; }
   .opt .sub { display: block; font-size: 12px; color: var(--muted); font-weight: 400; margin-top: 2px; }
   .opt.selected { border-color: var(--accent); background: var(--accent-soft); font-weight: 700; }
@@ -98,7 +99,7 @@
 <div class="wrap">
   <header>
     <span class="tag">2026 원화중 3-3</span>
-    <h1>🍗 회식 메뉴 조사 🌶️</h1>
+    <h1>🍗 메뉴 조사 🌶️</h1>
     <p>순서대로 고르고 마지막에 제출하면 끝!</p>
   </header>
   <div class="progress"><div id="progress"></div></div>
@@ -115,16 +116,12 @@
 // Apps Script 웹 앱 배포 후 받은 URL을 여기에 붙여 넣으세요.
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzTFZMPWJSTJRzMrixpiCqzd0ksnDUxGV7X8EQlt7-7knlbd1uSfNq0oaNpftC-LurN/exec";
 
-const OTHER = "기타(직접 입력)";
-const CHICKEN = {
-  "멕시카나": ["후라이드", "양념", "간장", "반반(후라이드+양념)", "치필링", "고추화삭", "땡초치킨", "치토스치킨"],
-  "BHC": ["뿌링클", "맛초킹", "골드킹", "콰삭킹", "스윗칠리킹", "쏘이갈릭킹", "맵소킹", "후라이드", "양념"],
-  "BBQ": ["황금올리브(후라이드)", "양념", "황금올리브 반반", "뿜치킹", "핫황금올리브", "땡초숯불양념", "자메이카 통다리"],
-  "굽네": ["오리지널", "고추바사삭", "볼케이노", "스윗 볼케이노", "갈비천왕", "오븐 바사삭", "치즈 바사삭"],
-  "호식이": ["후라이드", "양념", "간장", "매운양념", "땡초불꽃", "딥블랙갈릭"]
-};
+const OTHER = "기타";
+const BRANDS = ["멕시카나", "BHC", "BBQ", "굽네", "호식이"];
+const CHICKEN_MENU = ["후라이드", "양념", "간장", OTHER];
 const BONE = ["뼈", "순살", "상관없음"];
-const DRINKS = ["콜라", "제로콜라", "사이다", "환타", "상관없음"];
+const DRINKS = ["콜라", "사이다", "제로콜라", "제로사이다"];
+const COOLPIS = ["파인애플", "복숭아", "자두"];
 const YEOP_MENU = ["엽기떡볶이", "엽기오뎅", "엽기반반", "로제떡볶이", "마라떡볶이"];
 const YEOP_SPICY = [
   ["착한맛", "거의 안 매움"], ["초보맛", "살짝 매움"], ["덜매운맛", "적당히 매움"],
@@ -132,17 +129,17 @@ const YEOP_SPICY = [
 ];
 
 /* ================== 상태 ================== */
-const blank = () => ({ id: "", name: "", party: "", brand: "", flavor: "", flavorOther: "", bone: "", drink: "", yMenu: "", ySpicy: "" });
+const blank = () => ({ id: "", name: "", party: "", brand: "", flavors: [], flavorOther: "", bone: "", drink: "", yMenu: "", ySpicy: "", yDrink: "" });
 let S = blank();
 let stepIdx = 0;
 let submitting = false;
-try { const saved = JSON.parse(localStorage.getItem("hoesik33") || "null"); if (saved) S = Object.assign(blank(), saved); } catch (e) {}
+try { const saved = JSON.parse(localStorage.getItem("hoesik33") || "null"); if (saved) { S = Object.assign(blank(), saved); if (!Array.isArray(S.flavors)) S.flavors = []; } } catch (e) {}
 const save = () => { try { localStorage.setItem("hoesik33", JSON.stringify(S)); } catch (e) {} };
 
 function steps() {
   const base = ["who", "party"];
   if (S.party === "치킨") base.push("brand", "flavor", "bone", "drink");
-  else if (S.party === "엽떡") base.push("yMenu", "ySpicy");
+  else if (S.party === "엽떡") base.push("yMenu", "ySpicy", "yDrink");
   base.push("confirm");
   return base;
 }
@@ -175,10 +172,10 @@ function render() {
   if (step === "who") {
     html = `<div class="step-label">${label}</div><h2>누구인가요?</h2>
       <label class="field" for="id">학번 (5자리)</label>
-      <input type="tel" id="id" inputmode="numeric" maxlength="5" placeholder="예) 30302" value="${esc(S.id)}">
+      <input type="tel" id="id" inputmode="numeric" maxlength="5" value="${esc(S.id)}">
       <div class="field-gap"></div>
       <label class="field" for="name">이름</label>
-      <input type="text" id="name" maxlength="10" placeholder="예) 김민성" value="${esc(S.name)}">
+      <input type="text" id="name" maxlength="10" value="${esc(S.name)}">
       <div class="hint">같은 학번으로 다시 제출하면 마지막 제출만 반영돼요.</div>
       <div class="error" id="err"></div>`;
   } else if (step === "party") {
@@ -188,11 +185,12 @@ function render() {
         <button class="opt big yeop ${S.party === "엽떡" ? "selected" : ""}" data-key="party" data-val="엽떡"><span class="emoji">🌶️</span>엽떡파</button>
       </div>`;
   } else if (step === "brand") {
-    html = `<div class="step-label">${label}</div><h2>치킨 브랜드를 골라요</h2>` + optionList(Object.keys(CHICKEN), "brand");
+    html = `<div class="step-label">${label}</div><h2>치킨 브랜드를 골라요</h2>` + optionList(BRANDS, "brand");
   } else if (step === "flavor") {
-    const items = (CHICKEN[S.brand] || []).concat([OTHER]);
-    html = `<div class="step-label">${label}</div><h2>${esc(S.brand)} 메뉴는?</h2>` + optionList(items, "flavor") +
-      (S.flavor === OTHER ? `<input type="text" class="other-input" id="other" maxlength="30" placeholder="먹고 싶은 메뉴를 적어 주세요" value="${esc(S.flavorOther)}">` : "") +
+    html = `<div class="step-label">${label}</div><h2>치킨 메뉴는?</h2><div class="hint" style="margin:-8px 0 14px">여러 개 골라도 돼요</div>
+      <div class="options">` + CHICKEN_MENU.map(m => `<button class="opt ${S.flavors.includes(m) ? "selected" : ""}" data-key="flavors" data-val="${esc(m)}">
+        <span class="check">${S.flavors.includes(m) ? "☑" : "☐"}</span><span>${esc(m)}</span></button>`).join("") + `</div>` +
+      (S.flavors.includes(OTHER) ? `<input type="text" class="other-input" id="other" maxlength="30" placeholder="기타 메뉴를 입력하세요" value="${esc(S.flavorOther)}">` : "") +
       `<div class="error" id="err"></div>`;
   } else if (step === "bone") {
     html = `<div class="step-label">${label}</div><h2>뼈? 순살?</h2>` + optionList(BONE, "bone");
@@ -202,10 +200,12 @@ function render() {
     html = `<div class="step-label">${label}</div><h2>엽떡 메뉴는?</h2>` + optionList(YEOP_MENU, "yMenu");
   } else if (step === "ySpicy") {
     html = `<div class="step-label">${label}</div><h2>맵기는?</h2>` + optionList(YEOP_SPICY, "ySpicy");
+  } else if (step === "yDrink") {
+    html = `<div class="step-label">${label}</div><h2>쿨피스 맛은?</h2>` + optionList(COOLPIS, "yDrink");
   } else if (step === "confirm") {
     const rows = [["학번", S.id], ["이름", S.name], ["파", S.party === "치킨" ? "🍗 치킨파" : "🌶️ 엽떡파"]];
     if (S.party === "치킨") rows.push(["브랜드", S.brand], ["메뉴", flavorText()], ["뼈/순살", S.bone], ["음료", S.drink]);
-    else rows.push(["메뉴", S.yMenu], ["맵기", S.ySpicy]);
+    else rows.push(["메뉴", S.yMenu], ["맵기", S.ySpicy], ["음료", "쿨피스 " + S.yDrink]);
     html = `<div class="step-label">${label}</div><h2>이대로 제출할까요?</h2>
       <div class="summary">${rows.map(([k, v]) => `<div class="row"><span class="k">${k}</span><span class="v">${esc(v)}</span></div>`).join("")}</div>
       <div class="error" id="err"></div>`;
@@ -219,13 +219,15 @@ function render() {
 
   $card.querySelectorAll(".opt").forEach(b => b.addEventListener("click", () => {
     const key = b.dataset.key, val = b.dataset.val;
-    const changed = S[key] !== val;
+    if (key === "flavors") {
+      S.flavors = S.flavors.includes(val) ? S.flavors.filter(x => x !== val) : CHICKEN_MENU.filter(m => m === val || S.flavors.includes(m));
+      save(); render();
+      if (val === OTHER && S.flavors.includes(OTHER)) { const o = document.getElementById("other"); o && o.focus(); }
+      return;
+    }
     S[key] = val;
-    if (changed && key === "brand") S.flavor = "", S.flavorOther = "";
     save();
-    // 선택하면 자동으로 다음 단계 (기타 직접입력 제외)
-    if (!(key === "flavor" && val === OTHER)) { stepIdx++; render(); scrollTo(0, 0); }
-    else { render(); const o = document.getElementById("other"); o && o.focus(); }
+    stepIdx++; render(); scrollTo(0, 0);
   }));
   const bindInput = (id, key, fn) => { const el = document.getElementById(id); if (el) el.addEventListener("input", () => { S[key] = fn ? fn(el) : el.value; save(); $next.disabled = !canNext(step); }); };
   bindInput("id", "id", el => (el.value = el.value.replace(/\D/g, "").slice(0, 5)));
@@ -233,18 +235,19 @@ function render() {
   bindInput("other", "flavorOther");
 }
 
-function flavorText() { return S.flavor === OTHER ? `기타: ${S.flavorOther.trim()}` : S.flavor; }
+function flavorText() { return S.flavors.map(f => f === OTHER ? `기타(${S.flavorOther.trim()})` : f).join(", "); }
 
 function canNext(step) {
   switch (step) {
     case "who": return /^\d{5}$/.test(S.id) && S.name.trim().length >= 2;
     case "party": return !!S.party;
     case "brand": return !!S.brand;
-    case "flavor": return !!S.flavor && (S.flavor !== OTHER || S.flavorOther.trim().length > 0);
+    case "flavor": return S.flavors.length > 0 && (!S.flavors.includes(OTHER) || S.flavorOther.trim().length > 0);
     case "bone": return !!S.bone;
     case "drink": return !!S.drink;
     case "yMenu": return !!S.yMenu;
     case "ySpicy": return !!S.ySpicy;
+    case "yDrink": return !!S.yDrink;
     case "confirm": return !submitting;
   }
   return false;
@@ -272,7 +275,7 @@ async function submit() {
     brand: S.party === "치킨" ? S.brand : "",
     flavor: S.party === "치킨" ? flavorText() : "",
     bone: S.party === "치킨" ? S.bone : "",
-    drink: S.party === "치킨" ? S.drink : "",
+    drink: S.party === "치킨" ? S.drink : "쿨피스 " + S.yDrink,
     yMenu: S.party === "엽떡" ? S.yMenu : "",
     ySpicy: S.party === "엽떡" ? S.ySpicy : ""
   };
@@ -296,7 +299,7 @@ async function submit() {
 function showDone() {
   document.getElementById("progress").style.width = "100%";
   $bar.style.display = "none";
-  const what = S.party === "치킨" ? `${S.brand} ${flavorText()} (${S.bone}) + ${S.drink}` : `${S.yMenu} ${S.ySpicy}`;
+  const what = S.party === "치킨" ? `${S.brand} ${flavorText()} (${S.bone}) + ${S.drink}` : `${S.yMenu} ${S.ySpicy} + 쿨피스 ${S.yDrink}`;
   $card.innerHTML = `<div class="done"><div class="big-emoji">${S.party === "치킨" ? "🍗" : "🌶️"}</div>
     <h2>제출 완료!</h2>
     <p><b>${esc(S.id)} ${esc(S.name)}</b><br>${esc(what)}<br><br>바꾸고 싶으면 다시 제출하면 돼요.<br>마지막 제출만 반영됩니다.</p>
