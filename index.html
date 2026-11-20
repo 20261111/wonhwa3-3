@@ -122,6 +122,10 @@ const CHICKEN_MENU = ["후라이드", "양념", "간장", OTHER];
 const BONE = ["뼈", "순살", "상관없음"];
 const DRINKS = ["콜라", "사이다", "제로콜라", "제로사이다"];
 const COOLPIS = ["파인애플", "복숭아", "자두"];
+const NONE = "없음";
+const YEOP_TOP = [NONE, "치즈", "당면", "분모자", "메추리알", "소시지", "우삼겹", "오뎅"];
+const YEOP_SIDE = [NONE, "주먹김밥", "계란찜", "모둠튀김", "순대"];
+const MULTI = { flavors: CHICKEN_MENU, yTops: YEOP_TOP, ySides: YEOP_SIDE };
 const YEOP_MENU = ["엽기떡볶이", "엽기오뎅", "엽기반반", "로제떡볶이", "마라떡볶이"];
 const YEOP_SPICY = [
   ["착한맛", "거의 안 매움"], ["초보맛", "살짝 매움"], ["덜매운맛", "적당히 매움"],
@@ -129,17 +133,17 @@ const YEOP_SPICY = [
 ];
 
 /* ================== 상태 ================== */
-const blank = () => ({ id: "", name: "", party: "", brand: "", flavors: [], flavorOther: "", bone: "", drink: "", yMenu: "", ySpicy: "", yDrink: "" });
+const blank = () => ({ id: "", name: "", party: "", brand: "", flavors: [], flavorOther: "", bone: "", drink: "", yMenu: "", ySpicy: "", yTops: [], ySides: [], yDrink: "" });
 let S = blank();
 let stepIdx = 0;
 let submitting = false;
-try { const saved = JSON.parse(localStorage.getItem("hoesik33") || "null"); if (saved) { S = Object.assign(blank(), saved); if (!Array.isArray(S.flavors)) S.flavors = []; } } catch (e) {}
+try { const saved = JSON.parse(localStorage.getItem("hoesik33") || "null"); if (saved) { S = Object.assign(blank(), saved); for (const k of Object.keys(MULTI)) if (!Array.isArray(S[k])) S[k] = []; } } catch (e) {}
 const save = () => { try { localStorage.setItem("hoesik33", JSON.stringify(S)); } catch (e) {} };
 
 function steps() {
   const base = ["who", "party"];
   if (S.party === "치킨") base.push("brand", "flavor", "bone", "drink");
-  else if (S.party === "엽떡") base.push("yMenu", "ySpicy", "yDrink");
+  else if (S.party === "엽떡") base.push("yMenu", "ySpicy", "yTop", "ySide", "yDrink");
   base.push("confirm");
   return base;
 }
@@ -200,12 +204,16 @@ function render() {
     html = `<div class="step-label">${label}</div><h2>엽떡 메뉴는?</h2>` + optionList(YEOP_MENU, "yMenu");
   } else if (step === "ySpicy") {
     html = `<div class="step-label">${label}</div><h2>맵기는?</h2>` + optionList(YEOP_SPICY, "ySpicy");
+  } else if (step === "yTop") {
+    html = `<div class="step-label">${label}</div><h2>토핑 추가는?</h2><div class="hint" style="margin:-8px 0 14px">여러 개 골라도 돼요. 없으면 '없음'</div>` + multiList("yTops");
+  } else if (step === "ySide") {
+    html = `<div class="step-label">${label}</div><h2>사이드는?</h2><div class="hint" style="margin:-8px 0 14px">여러 개 골라도 돼요. 없으면 '없음'</div>` + multiList("ySides");
   } else if (step === "yDrink") {
     html = `<div class="step-label">${label}</div><h2>쿨피스 맛은?</h2>` + optionList(COOLPIS, "yDrink");
   } else if (step === "confirm") {
     const rows = [["학번", S.id], ["이름", S.name], ["파", S.party === "치킨" ? "🍗 치킨파" : "🌶️ 엽떡파"]];
     if (S.party === "치킨") rows.push(["브랜드", S.brand], ["메뉴", flavorText()], ["뼈/순살", S.bone], ["음료", S.drink]);
-    else rows.push(["메뉴", S.yMenu], ["맵기", S.ySpicy], ["음료", "쿨피스 " + S.yDrink]);
+    else rows.push(["메뉴", S.yMenu], ["맵기", S.ySpicy], ["토핑 추가", S.yTops.join(", ")], ["사이드", S.ySides.join(", ")], ["음료", "쿨피스 " + S.yDrink]);
     html = `<div class="step-label">${label}</div><h2>이대로 제출할까요?</h2>
       <div class="summary">${rows.map(([k, v]) => `<div class="row"><span class="k">${k}</span><span class="v">${esc(v)}</span></div>`).join("")}</div>
       <div class="error" id="err"></div>`;
@@ -219,8 +227,11 @@ function render() {
 
   $card.querySelectorAll(".opt").forEach(b => b.addEventListener("click", () => {
     const key = b.dataset.key, val = b.dataset.val;
-    if (key === "flavors") {
-      S.flavors = S.flavors.includes(val) ? S.flavors.filter(x => x !== val) : CHICKEN_MENU.filter(m => m === val || S.flavors.includes(m));
+    if (MULTI[key]) {
+      const cur = S[key];
+      if (cur.includes(val)) S[key] = cur.filter(x => x !== val);
+      else if (val === NONE) S[key] = [NONE];
+      else S[key] = MULTI[key].filter(m => m === val || (cur.includes(m) && m !== NONE));
       save(); render();
       if (val === OTHER && S.flavors.includes(OTHER)) { const o = document.getElementById("other"); o && o.focus(); }
       return;
@@ -235,6 +246,11 @@ function render() {
   bindInput("other", "flavorOther");
 }
 
+function multiList(key) {
+  return `<div class="options">` + MULTI[key].map(m => `<button class="opt ${S[key].includes(m) ? "selected" : ""}" data-key="${key}" data-val="${esc(m)}">
+    <span class="check">${S[key].includes(m) ? "☑" : "☐"}</span><span>${esc(m)}</span></button>`).join("") + `</div>`;
+}
+function yeopText() { return `${S.yMenu} / 추가: ${S.yTops.join(", ")} / 사이드: ${S.ySides.join(", ")}`; }
 function flavorText() { return S.flavors.map(f => f === OTHER ? `기타(${S.flavorOther.trim()})` : f).join(", "); }
 
 function canNext(step) {
@@ -247,6 +263,8 @@ function canNext(step) {
     case "drink": return !!S.drink;
     case "yMenu": return !!S.yMenu;
     case "ySpicy": return !!S.ySpicy;
+    case "yTop": return S.yTops.length > 0;
+    case "ySide": return S.ySides.length > 0;
     case "yDrink": return !!S.yDrink;
     case "confirm": return !submitting;
   }
@@ -276,7 +294,7 @@ async function submit() {
     flavor: S.party === "치킨" ? flavorText() : "",
     bone: S.party === "치킨" ? S.bone : "",
     drink: S.party === "치킨" ? S.drink : "쿨피스 " + S.yDrink,
-    yMenu: S.party === "엽떡" ? S.yMenu : "",
+    yMenu: S.party === "엽떡" ? yeopText() : "",
     ySpicy: S.party === "엽떡" ? S.ySpicy : ""
   };
   const body = JSON.stringify(payload);
@@ -299,7 +317,7 @@ async function submit() {
 function showDone() {
   document.getElementById("progress").style.width = "100%";
   $bar.style.display = "none";
-  const what = S.party === "치킨" ? `${S.brand} ${flavorText()} (${S.bone}) + ${S.drink}` : `${S.yMenu} ${S.ySpicy} + 쿨피스 ${S.yDrink}`;
+  const what = S.party === "치킨" ? `${S.brand} ${flavorText()} (${S.bone}) + ${S.drink}` : `${S.yMenu} ${S.ySpicy} / 추가: ${S.yTops.join(", ")} / 사이드: ${S.ySides.join(", ")} / 쿨피스 ${S.yDrink}`;
   $card.innerHTML = `<div class="done"><div class="big-emoji">${S.party === "치킨" ? "🍗" : "🌶️"}</div>
     <h2>제출 완료!</h2>
     <p><b>${esc(S.id)} ${esc(S.name)}</b><br>${esc(what)}<br><br>바꾸고 싶으면 다시 제출하면 돼요.<br>마지막 제출만 반영됩니다.</p>
